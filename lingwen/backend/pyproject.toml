@@ -1,0 +1,44 @@
+[tool.poetry]
+name = "lingwen"
+version = "0.1.0"
+description = "灵问智能问数引擎"
+authors = ["Lingwen Team"]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+fastapi = "^0.115.0"
+uvicorn = {extras = ["standard"], version = "^0.32.0"}
+pydantic = "^2.9.0"
+pydantic-settings = "^2.6.0"
+sqlalchemy = {extras = ["asyncio"], version = "^2.0.35"}
+pymysql = "^1.1.1"
+aiomysql = "^0.2.0"
+alembic = "^1.14.0"
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+passlib = {extras = ["bcrypt"], version = "^1.7.4"}
+python-multipart = "^0.0.12"
+langchain = "^0.3.0"
+langchain-deepseek = "^0.1.0"
+langgraph = "^0.2.0"
+langchain-community = "^0.3.0"
+chromadb = "^0.5.0"
+redis = {version = "^5.2.0", optional = true}
+hiredis = {version = "^2.3.0", optional = true}
+cryptography = "^43.0.0"
+httpx = "^0.28.0"
+python-dotenv = "^1.0.1"
+csvkit = "^2.0.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^8.3.0"
+pytest-asyncio = "^0.24.0"
+black = "^24.10.0"
+ruff = "^0.7.0"
+mypy = "^1.13.0"
+
+[tool.poetry.extras]
+redis = ["redis", "hiredis"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

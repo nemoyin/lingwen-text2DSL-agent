@@ -1,0 +1,29 @@
+# =============================================================================
+# 天府一网监 前端 .dockerignore
+# =============================================================================
+
+# Node
+node_modules/
+
+# Build output
+dist/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker (不要排除 nginx.conf，运行时需要)
+Dockerfile

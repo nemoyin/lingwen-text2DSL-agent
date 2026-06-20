@@ -1,0 +1,45 @@
+# =============================================================================
+# 天府一网监 后端 .dockerignore
+# =============================================================================
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+venv/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+logs/
+*.log
+backend.log
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker (entrypoint script 需要保留在镜像中)
+Dockerfile
+
+# Data (chromadb is a volume mount)
+data/chromadb/

@@ -1,0 +1,113 @@
+# =============================================================================
+# 天府一网监 docker-compose.yml
+# 单机部署方案：MySQL + 后端 + Nginx（含前端）
+# 使用方式：docker compose up -d
+# =============================================================================
+
+networks:
+  tianfu-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+    driver: local
+  chromadb-data:
+    driver: local
+
+x-common-dns: &common-dns
+  dns:
+    - 8.8.8.8
+    - 114.114.114.114
+
+services:
+  # ==================== MySQL 数据库 ====================
+  mysql:
+    <<: *common-dns
+    image: mysql:8.0
+    container_name: tianfu-mysql
+    restart: unless-stopped
+    networks:
+      - tianfu-network
+    ports:
+      - "3307:3306"  # 映射到 3307 避免与本地 MySQL 冲突
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-andy_l007}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-andy_l007}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ==================== 后端 FastAPI ====================
+  backend:
+    <<: *common-dns
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: tianfu-backend
+    restart: unless-stopped
+    networks:
+      - tianfu-network
+    ports:
+      - "8001:8000"  # 映射到 8001 避免与本地开发端口冲突
+    environment:
+      # 数据库连接（使用 MySQL 服务名直连，不走 localhost）
+      LINGWEN_DB_HOST: mysql
+      LINGWEN_DB_PORT: "3306"
+      LINGWEN_DB_USER: root
+      LINGWEN_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-andy_l007}
+      LINGWEN_DB_NAME: lingwen_metadata
+
+      # LLM API 配置
+      LINGWEN_LLM_API_KEY: ${LINGWEN_LLM_API_KEY}
+      LINGWEN_LLM_MODEL: ${LINGWEN_LLM_MODEL:-deepseek-chat}
+
+      # Embedding API 配置
+      LINGWEN_EMBED_API_KEY: ${LINGWEN_EMBED_API_KEY}
+      LINGWEN_EMBED_BASE_URL: ${LINGWEN_EMBED_BASE_URL:-https://ai.gitee.com/v1}
+      LINGWEN_LLM_EMBED_MODEL: ${LINGWEN_LLM_EMBED_MODEL:-Qwen3-Embedding-8B}
+
+      # ChromaDB 持久化路径
+      LINGWEN_CHROMA_DIR: /data/chromadb
+
+      # JWT 配置
+      LINGWEN_JWT_SECRET: ${LINGWEN_JWT_SECRET:-lingwen-docker-secret-2026}
+      LINGWEN_JWT_EXPIRE_MINUTES: ${LINGWEN_JWT_EXPIRE_MINUTES:-480}
+    volumes:
+      - chromadb-data:/data/chromadb
+      - ./backend/logs:/app/logs  # 日志持久化
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+  # ==================== Nginx（前端 + 反向代理） ====================
+  nginx:
+    <<: *common-dns
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tianfu-nginx
+    restart: unless-stopped
+    networks:
+      - tianfu-network
+    ports:
+      - "8080:80"  # 映射到 8080 避免与本地 Nginx 冲突
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
