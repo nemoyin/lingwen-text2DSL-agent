@@ -70,7 +70,7 @@ class HiveAdapter(BaseDataSourceAdapter):
 
     async def scan_tables(self, params: ConnectionParams) -> list[SchemaTable]:
         url = self.build_connection_url(params)
-        engine = create_async_engine(url, echo=False, pool_pre_ping=True)
+        engine = create_async_engine(url, echo=False, pool_pre_ping=False)
         async with engine.connect() as conn:
             result = await conn.execute(text("SHOW TABLES IN {db}".format(db=params.database)))
             rows = result.fetchall()
@@ -82,7 +82,7 @@ class HiveAdapter(BaseDataSourceAdapter):
         columns: list[SchemaColumn] = []
 
         url = self.build_connection_url(params)
-        engine = create_async_engine(url, echo=False, pool_pre_ping=True)
+        engine = create_async_engine(url, echo=False, pool_pre_ping=False)
 
         async with engine.connect() as conn:
             for tbl in tables:

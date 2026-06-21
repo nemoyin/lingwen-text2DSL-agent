@@ -59,7 +59,7 @@ class DorisAdapter(BaseDataSourceAdapter):
 
     async def scan_tables(self, params: ConnectionParams) -> list[SchemaTable]:
         url = self.build_connection_url(params)
-        engine = create_async_engine(url, echo=False, pool_pre_ping=True)
+        engine = create_async_engine(url, echo=False, pool_pre_ping=False)
         async with engine.connect() as conn:
             result = await conn.execute(
                 text("SELECT TABLE_NAME, TABLE_COMMENT FROM information_schema.TABLES WHERE TABLE_SCHEMA=:db AND TABLE_TYPE='BASE TABLE'"),
@@ -71,7 +71,7 @@ class DorisAdapter(BaseDataSourceAdapter):
 
     async def scan_columns(self, params: ConnectionParams) -> list[SchemaColumn]:
         url = self.build_connection_url(params)
-        engine = create_async_engine(url, echo=False, pool_pre_ping=True)
+        engine = create_async_engine(url, echo=False, pool_pre_ping=False)
         async with engine.connect() as conn:
             result = await conn.execute(
                 text("SELECT TABLE_NAME,COLUMN_NAME,DATA_TYPE,IS_NULLABLE,COLUMN_DEFAULT,COLUMN_COMMENT,COLUMN_KEY,ORDINAL_POSITION FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=:db ORDER BY TABLE_NAME,ORDINAL_POSITION"),

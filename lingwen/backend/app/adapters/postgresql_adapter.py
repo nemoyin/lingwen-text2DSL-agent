@@ -104,7 +104,7 @@ class PostgreSQLAdapter(BaseDataSourceAdapter):
         """Query ``information_schema.TABLES`` for PostgreSQL."""
         schema = self._schema_name(params)
         url = self.build_connection_url(params)
-        engine = create_async_engine(url, echo=False, pool_pre_ping=True)
+        engine = create_async_engine(url, echo=False, pool_pre_ping=False)
 
         async with engine.connect() as conn:
             result = await conn.execute(
@@ -139,7 +139,7 @@ class PostgreSQLAdapter(BaseDataSourceAdapter):
         """
         schema = self._schema_name(params)
         url = self.build_connection_url(params)
-        engine = create_async_engine(url, echo=False, pool_pre_ping=True)
+        engine = create_async_engine(url, echo=False, pool_pre_ping=False)
 
         async with engine.connect() as conn:
             result = await conn.execute(

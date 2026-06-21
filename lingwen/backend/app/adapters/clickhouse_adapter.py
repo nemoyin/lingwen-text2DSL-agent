@@ -64,7 +64,7 @@ class ClickHouseAdapter(BaseDataSourceAdapter):
 
     async def scan_tables(self, params: ConnectionParams) -> list[SchemaTable]:
         url = self.build_connection_url(params)
-        engine = create_async_engine(url, echo=False, pool_pre_ping=True)
+        engine = create_async_engine(url, echo=False, pool_pre_ping=False)
         async with engine.connect() as conn:
             result = await conn.execute(
                 text("SELECT name, comment FROM system.tables WHERE database=:db AND engine NOT IN ('Distributed')"),
@@ -76,7 +76,7 @@ class ClickHouseAdapter(BaseDataSourceAdapter):
 
     async def scan_columns(self, params: ConnectionParams) -> list[SchemaColumn]:
         url = self.build_connection_url(params)
-        engine = create_async_engine(url, echo=False, pool_pre_ping=True)
+        engine = create_async_engine(url, echo=False, pool_pre_ping=False)
         async with engine.connect() as conn:
             result = await conn.execute(
                 text("SELECT table, name, type, comment, is_in_primary_key, position FROM system.columns WHERE database=:db ORDER BY table, position"),

@@ -93,7 +93,7 @@ class MySQLAdapter(BaseDataSourceAdapter):
     ) -> list[SchemaTable]:
         """Query ``information_schema.TABLES`` for user tables."""
         url = self.build_connection_url(params)
-        engine = create_async_engine(url, echo=False, pool_pre_ping=True)
+        engine = create_async_engine(url, echo=False, pool_pre_ping=False)
 
         async with engine.connect() as conn:
             result = await conn.execute(
@@ -124,7 +124,7 @@ class MySQLAdapter(BaseDataSourceAdapter):
         Primary key detection uses ``COLUMN_KEY = 'PRI'`` (MySQL-specific).
         """
         url = self.build_connection_url(params)
-        engine = create_async_engine(url, echo=False, pool_pre_ping=True)
+        engine = create_async_engine(url, echo=False, pool_pre_ping=False)
 
         async with engine.connect() as conn:
             result = await conn.execute(

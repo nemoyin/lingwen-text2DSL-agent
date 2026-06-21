@@ -69,7 +69,7 @@ class OracleAdapter(BaseDataSourceAdapter):
     async def scan_tables(self, params: ConnectionParams) -> list[SchemaTable]:
         owner = params.username.upper()
         url = self.build_connection_url(params)
-        engine = create_async_engine(url, echo=False, pool_pre_ping=True)
+        engine = create_async_engine(url, echo=False, pool_pre_ping=False)
         async with engine.connect() as conn:
             result = await conn.execute(
                 text("SELECT TABLE_NAME, COMMENTS FROM ALL_TAB_COMMENTS WHERE OWNER=:owner AND TABLE_TYPE='TABLE' ORDER BY TABLE_NAME"),
@@ -82,7 +82,7 @@ class OracleAdapter(BaseDataSourceAdapter):
     async def scan_columns(self, params: ConnectionParams) -> list[SchemaColumn]:
         owner = params.username.upper()
         url = self.build_connection_url(params)
-        engine = create_async_engine(url, echo=False, pool_pre_ping=True)
+        engine = create_async_engine(url, echo=False, pool_pre_ping=False)
         async with engine.connect() as conn:
             # PK detection via ALL_CONSTRAINTS / ALL_CONS_COLUMNS
             result = await conn.execute(
