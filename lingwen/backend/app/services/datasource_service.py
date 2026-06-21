@@ -218,7 +218,7 @@ async def get_connection(db: AsyncSession, ds_id: int) -> AsyncEngine:
         echo=False,
         pool_size=5,
         max_overflow=10,
-        pool_pre_ping=True,
+        pool_pre_ping=False,  # disabled: aiomysql's ping() signature is incompatible with SQLAlchemy's do_ping
         pool_recycle=1800,
     )
     _engine_cache[ds_id] = engine
