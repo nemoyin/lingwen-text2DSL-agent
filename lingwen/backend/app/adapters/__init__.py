@@ -88,3 +88,8 @@ def available_types() -> list[dict]:
 # ── Eagerly import adapters so @register_adapter fires at startup ─────────
 from app.adapters.mysql_adapter import MySQLAdapter  # noqa: E402, F401
 from app.adapters.postgresql_adapter import PostgreSQLAdapter  # noqa: E402, F401
+from app.adapters.doris_adapter import DorisAdapter  # noqa: E402, F401
+from app.adapters.clickhouse_adapter import ClickHouseAdapter  # noqa: E402, F401
+from app.adapters.oracle_adapter import OracleAdapter  # noqa: E402, F401
+from app.adapters.hive_adapter import HiveAdapter  # noqa: E402, F401
+from app.adapters.elasticsearch_adapter import ElasticsearchAdapter  # noqa: E402, F401
