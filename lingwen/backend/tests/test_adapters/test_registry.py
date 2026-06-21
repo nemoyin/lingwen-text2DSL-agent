@@ -9,6 +9,16 @@ from app.adapters.base import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _save_restore_registry():
+    """Save and restore the global registry so tests don't pollute each other."""
+    import app.adapters as mod
+    saved = dict(mod._registry)
+    yield
+    mod._registry.clear()
+    mod._registry.update(saved)
+
+
 # ── Helpers: minimal adapters for registry testing ──
 class _AlphaAdapter(BaseDataSourceAdapter):
     @staticmethod

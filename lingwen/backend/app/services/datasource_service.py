@@ -12,12 +12,26 @@ from app.models.datasource import DataSource
 from app.schemas.datasource import DataSourceCreate, DataSourceUpdate
 from app.security.encrypt import decrypt_password, encrypt_password
 from app.config import settings
+from app.adapters import get_adapter
+from app.adapters.base import ConnectionParams
 
 logger = logging.getLogger(__name__)
 
 # Cache of dynamically created engines keyed by datasource id.
 # Deleted datasources should have their engine disposed and removed.
 _engine_cache: Dict[int, AsyncEngine] = {}
+
+
+def _build_connection_params(ds: DataSource, password: str) -> ConnectionParams:
+    """Build a ConnectionParams from a DataSource ORM row."""
+    return ConnectionParams(
+        host=ds.host,
+        port=ds.port,
+        database=ds.database,
+        username=ds.username,
+        password=password,
+        extra_params=ds.extra_params if hasattr(ds, "extra_params") and ds.extra_params else {},
+    )
 
 
 async def create(db: AsyncSession, data: DataSourceCreate) -> DataSource:
@@ -161,9 +175,9 @@ async def delete(db: AsyncSession, ds_id: int) -> None:
 
 
 async def test_connection(db: AsyncSession, ds_id: int) -> bool:
-    """Test whether a data source's MySQL connection is reachable.
+    """Test whether a data source connection is reachable.
 
-    Opens a short-lived aiomysql connection, pings it, and closes.
+    Delegates to the adapter registered for this datasource's ``db_type``.
 
     Args:
         db: The database session.
@@ -174,24 +188,9 @@ async def test_connection(db: AsyncSession, ds_id: int) -> bool:
     """
     ds = await get(db, ds_id)
     password = decrypt_password(ds.password_encrypted)
-    try:
-        conn = await aiomysql.connect(
-            host=ds.host,
-            port=ds.port,
-            user=ds.username,
-            password=password,
-            db=ds.database,
-            connect_timeout=5,
-        )
-        await conn.ping()
-        conn.close()
-        logger.info("DataSource connection test passed: id=%d", ds_id)
-        return True
-    except Exception as exc:
-        logger.warning(
-            "DataSource connection test failed: id=%d error=%s", ds_id, exc
-        )
-        return False
+    adapter = get_adapter(ds.db_type)
+    params = _build_connection_params(ds, password)
+    return await adapter.test_connection(params)
 
 
 async def get_connection(db: AsyncSession, ds_id: int) -> AsyncEngine:
@@ -211,10 +210,9 @@ async def get_connection(db: AsyncSession, ds_id: int) -> AsyncEngine:
 
     ds = await get(db, ds_id)
     password = decrypt_password(ds.password_encrypted)
-    url = (
-        f"mysql+aiomysql://{ds.username}:{password}"
-        f"@{ds.host}:{ds.port}/{ds.database}?charset=utf8mb4"
-    )
+    adapter = get_adapter(ds.db_type)
+    params = _build_connection_params(ds, password)
+    url = adapter.build_connection_url(params)
     engine = create_async_engine(
         url,
         echo=False,
@@ -224,7 +222,7 @@ async def get_connection(db: AsyncSession, ds_id: int) -> AsyncEngine:
         pool_recycle=1800,
     )
     _engine_cache[ds_id] = engine
-    logger.info("Dynamic engine created for datasource id=%d", ds_id)
+    logger.info("Dynamic engine created for datasource id=%d type=%s", ds_id, ds.db_type)
     return engine
 
 
