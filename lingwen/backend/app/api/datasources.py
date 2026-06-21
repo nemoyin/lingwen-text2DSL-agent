@@ -11,10 +11,12 @@ from app.schemas.datasource import (
     DataSourceCreate,
     DataSourceResponse,
     DataSourceUpdate,
+    DBTypeMeta,
 )
 from app.schemas.common import ApiResponse
 from app.services import datasource_service
 from app.utils.response import success
+from app.adapters import available_types
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +60,19 @@ async def create_datasource(
         raise
     result = DataSourceResponse.model_validate(ds).model_dump()
     return success(data=result)
+
+
+@router.get("/types", response_model=dict)
+async def list_db_types() -> dict:
+    """List all supported database types with metadata for the front-end selector.
+
+    Returns:
+        A list of dicts with ``db_type``, ``display_name``, ``default_port``,
+        and ``extra_fields`` for each registered adapter.
+    """
+    types = available_types()
+    # Validate with Pydantic for clean serialisation
+    return success(data=[DBTypeMeta(**t).model_dump() for t in types])
 
 
 @router.get("/{datasource_id}", response_model=dict)

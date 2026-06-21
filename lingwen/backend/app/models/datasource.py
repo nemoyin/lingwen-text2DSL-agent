@@ -1,9 +1,9 @@
 """DataSource connection configuration model."""
 
 from datetime import datetime
-from typing import List, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
-from sqlalchemy import DateTime, Integer, String, func
+from sqlalchemy import DateTime, Integer, String, func, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.database import Base
@@ -14,10 +14,14 @@ if TYPE_CHECKING:
 
 
 class DataSource(Base):
-    """External MySQL data source registered in the system.
+    """Data source registered in the system — supports multiple database types.
 
     The ``password_encrypted`` field stores an AES-256-CBC encrypted password.
     Never log or expose this field in API responses.
+
+    The ``extra_params`` JSON column stores type-specific connection parameters
+    (e.g. ``{"schema": "public"}`` for PostgreSQL, ``{"service_name": "ORCL"}``
+    for Oracle).
     """
 
     __tablename__ = "datasources"
@@ -34,6 +38,10 @@ class DataSource(Base):
     database: Mapped[str] = mapped_column(String(200), nullable=False)
     username: Mapped[str] = mapped_column(String(200), nullable=False)
     password_encrypted: Mapped[str] = mapped_column(String(512), nullable=False)
+    extra_params: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+        JSON, nullable=True, default=None,
+        comment="Type-specific connection parameters (schema, service_name, auth_type, etc.)",
+    )
     status: Mapped[str] = mapped_column(
         String(20), default="inactive", nullable=False
     )
