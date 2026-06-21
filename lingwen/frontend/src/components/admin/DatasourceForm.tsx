@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -7,8 +7,10 @@ import {
   TextField,
   Button,
   MenuItem,
+  CircularProgress,
 } from '@mui/material';
-import type { DataSource, DataSourceCreate } from '../../types';
+import type { DataSource, DataSourceCreate, DBTypeMeta } from '../../types';
+import { datasourceService } from '../../services/datasourceService';
 
 interface Props {
   open: boolean;
@@ -25,11 +27,26 @@ const DEFAULT: DataSourceCreate = {
   database: '',
   username: 'root',
   password: '',
+  extra_params: {},
 };
 
 export default function DatasourceForm({ open, initial, onClose, onSave }: Props) {
   const [form, setForm] = useState<DataSourceCreate>(DEFAULT);
   const [saving, setSaving] = useState(false);
+  const [dbTypes, setDbTypes] = useState<DBTypeMeta[]>([]);
+  const [typesLoading, setTypesLoading] = useState(false);
+
+  // Fetch available DB types on mount
+  useEffect(() => {
+    let cancelled = false;
+    setTypesLoading(true);
+    datasourceService
+      .fetchDbTypes()
+      .then((types) => { if (!cancelled) setDbTypes(types); })
+      .catch(() => { /* fall back to static defaults */ })
+      .finally(() => { if (!cancelled) setTypesLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (initial) {
@@ -41,6 +58,7 @@ export default function DatasourceForm({ open, initial, onClose, onSave }: Props
         database: initial.database,
         username: initial.username,
         password: '',
+        extra_params: initial.extra_params || {},
       });
     } else {
       setForm(DEFAULT);
@@ -50,6 +68,21 @@ export default function DatasourceForm({ open, initial, onClose, onSave }: Props
   const handleChange = (field: keyof DataSourceCreate) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, [field]: field === 'port' ? Number(e.target.value) : e.target.value }));
   };
+
+  // When db_type changes, auto-fill port to the type's default
+  const handleDbTypeChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newType = e.target.value;
+      const meta = dbTypes.find((t) => t.db_type === newType);
+      setForm((prev) => ({
+        ...prev,
+        db_type: newType,
+        port: meta?.default_port ?? prev.port,
+        extra_params: {},
+      }));
+    },
+    [dbTypes],
+  );
 
   const handleSubmit = async () => {
     setSaving(true);
@@ -66,9 +99,29 @@ export default function DatasourceForm({ open, initial, onClose, onSave }: Props
       <DialogTitle>{initial ? '编辑数据源' : '新增数据源'}</DialogTitle>
       <DialogContent>
         <TextField fullWidth margin="dense" label="名称" value={form.name} onChange={handleChange('name')} required />
-        <TextField select fullWidth margin="dense" label="类型" value={form.db_type} onChange={handleChange('db_type')}>
-          <MenuItem value="mysql">MySQL</MenuItem>
+
+        <TextField
+          select
+          fullWidth
+          margin="dense"
+          label="类型"
+          value={form.db_type}
+          onChange={handleDbTypeChange}
+          InputProps={typesLoading ? { endAdornment: <CircularProgress size={20} /> } : undefined}
+        >
+          {dbTypes.length > 0
+            ? dbTypes.map((t) => (
+                <MenuItem key={t.db_type} value={t.db_type}>
+                  {t.display_name}
+                </MenuItem>
+              ))
+            : /* Fallback when API hasn't loaded yet */
+              [
+                <MenuItem key="mysql" value="mysql">MySQL</MenuItem>,
+                <MenuItem key="postgresql" value="postgresql">PostgreSQL</MenuItem>,
+              ]}
         </TextField>
+
         <TextField fullWidth margin="dense" label="主机" value={form.host} onChange={handleChange('host')} required />
         <TextField fullWidth margin="dense" label="端口" type="number" value={form.port} onChange={handleChange('port')} required />
         <TextField fullWidth margin="dense" label="数据库" value={form.database} onChange={handleChange('database')} required />

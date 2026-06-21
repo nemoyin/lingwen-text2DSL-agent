@@ -6,6 +6,7 @@ import type {
   DataSource,
   DataSourceCreate,
   DataSourceUpdate,
+  DBTypeMeta,
 } from '../types';
 
 export async function getAll(): Promise<DataSource[]> {
@@ -46,3 +47,19 @@ export async function testConnection(
   );
   return resp.data.data!;
 }
+
+export async function fetchDbTypes(): Promise<DBTypeMeta[]> {
+  const resp = await api.get<ApiResponse<DBTypeMeta[]>>('/api/datasources/types');
+  return resp.data.data!;
+}
+
+/** Default-exported service object for component convenience. */
+export const datasourceService = {
+  getAll,
+  getOne,
+  create,
+  update,
+  remove,
+  testConnection,
+  fetchDbTypes,
+};
