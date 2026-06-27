@@ -47,15 +47,19 @@ class TestPostgreSQLConnectionURL:
         url = adapter.build_connection_url(params)
         assert "reader:secret" in url
 
-    def test_default_schema(self, adapter):
-        """When extra_params has no schema, default is 'public'."""
+    def test_url_no_unsupported_options(self, adapter):
+        """asyncpg does not support options= query parameter — URL must be clean."""
         p = ConnectionParams(host="h", port=5432, database="d", username="u", password="p")
         url = adapter.build_connection_url(p)
-        assert "?schema=public" in url or "options=-c%20search_path%3Dpublic" in url
+        assert "postgresql+asyncpg://" in url
+        # asyncpg rejects 'options' keyword — ensure it's NOT in the URL
+        assert "options=" not in url
 
-    def test_custom_schema(self, adapter, params):
+    def test_url_works_with_schema_extra_param(self, adapter, params):
+        """Schema extra_param must not break URL building (it's used at query time)."""
         url = adapter.build_connection_url(params)
-        assert "schema=public" in url or "search_path" in url
+        assert url.startswith("postgresql+asyncpg://")
+        assert "reader:secret" in url
 
 
 class TestPostgreSQLScanTables:

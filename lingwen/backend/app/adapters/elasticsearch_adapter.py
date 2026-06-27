@@ -101,25 +101,27 @@ class ElasticsearchAdapter(BaseDataSourceAdapter):
         columns: list[SchemaColumn] = []
         es = await self._es_client(params)
 
-        for tbl in tables:
-            try:
-                resp = await es.indices.get_mapping(index=tbl.table_name)
-                await es.close()
+        try:
+            for tbl in tables:
+                try:
+                    resp = await es.indices.get_mapping(index=tbl.table_name)
 
-                index_data = resp.get(tbl.table_name, {})
-                mappings = index_data.get("mappings", {})
-                properties = mappings.get("properties", {})
+                    index_data = resp.get(tbl.table_name, {})
+                    mappings = index_data.get("mappings", {})
+                    properties = mappings.get("properties", {})
 
-                for i, (field_name, field_def) in enumerate(properties.items()):
-                    columns.append(SchemaColumn(
-                        table_name=tbl.table_name,
-                        column_name=field_name,
-                        data_type=field_def.get("type", "unknown"),
-                        nullable=True,
-                        ordinal_position=i + 1,
-                    ))
-            except Exception as exc:
-                logger.warning("ES mapping scan failed for index %s: %s", tbl.table_name, exc)
+                    for i, (field_name, field_def) in enumerate(properties.items()):
+                        columns.append(SchemaColumn(
+                            table_name=tbl.table_name,
+                            column_name=field_name,
+                            data_type=field_def.get("type", "unknown"),
+                            nullable=True,
+                            ordinal_position=i + 1,
+                        ))
+                except Exception as exc:
+                    logger.warning("ES mapping scan failed for index %s: %s", tbl.table_name, exc)
+        finally:
+            await es.close()
 
         return columns
 

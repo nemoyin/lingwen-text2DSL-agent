@@ -52,18 +52,18 @@ class PostgreSQLAdapter(BaseDataSourceAdapter):
     def build_connection_url(self, params: ConnectionParams) -> str:
         """Build a ``postgresql+asyncpg://`` URL.
 
-        The ``schema`` extra_param sets the default search_path.
+        The ``schema`` extra_param is used at query time by schema-scanning
+        methods; search_path is NOT forced via ``options=`` because asyncpg
+        does not accept that parameter (unlike psycopg2).
         """
         user = quote_plus(params.username)
         password = quote_plus(params.password)
         host = params.host
         port = params.port
         database = params.database
-        schema = params.extra_params.get("schema", "public")
         return (
             f"postgresql+asyncpg://{user}:{password}"
             f"@{host}:{port}/{database}"
-            f"?options=-c%20search_path%3D{schema}"
         )
 
     async def test_connection(self, params: ConnectionParams) -> bool:

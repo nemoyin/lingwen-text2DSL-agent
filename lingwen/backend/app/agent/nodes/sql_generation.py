@@ -11,7 +11,9 @@ from app.agent.state import AgentState
 from app.models.database import async_session
 from app.models.table_metadata import TableMetadata
 from app.models.column_metadata import ColumnMetadata
+from app.models.datasource import DataSource
 from app.services import skill_service
+from app.adapters import get_adapter
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
@@ -185,12 +187,28 @@ class SQLGenerationNode:
         logger.info("[Pipeline|SQL生成] 上下文: schema=%dchars fewshot=%dchars history=%d turns retry=%d",
                     len(schema_context), len(fewshot_context), len(state.get("history", [])), retry_count)
 
-        # Get prompt template from active skill
-        async with async_session() as db:
-            skill = await skill_service.get_active(db)
-            prompt_template = (
-                skill.prompt_template if skill else _DEFAULT_PROMPT
-            )
+        # Get prompt template from active skill AND datasource dialect hint
+        dialect_hint = ""
+        try:
+            async with async_session() as db:
+                skill = await skill_service.get_active(db)
+                prompt_template = (
+                    skill.prompt_template if skill else _DEFAULT_PROMPT
+                )
+                # Look up datasource db_type → adapter → dialect hint
+                ds_result = await db.execute(
+                    select(DataSource.db_type).where(DataSource.id == datasource_id)
+                )
+                ds_db_type = ds_result.scalars().first()
+                if ds_db_type:
+                    adapter = get_adapter(ds_db_type)
+                    dialect_hint = adapter.get_dialect_hint()
+                    logger.info("[Pipeline|SQL生成] 使用方言提示, db_type=%s", ds_db_type)
+        except Exception as exc:
+            # Fallback: if DB query fails, use MySQL as safe default
+            logger.warning("[Pipeline|SQL生成] 获取方言提示失败: %s, 回退到MySQL", exc)
+            prompt_template = _DEFAULT_PROMPT
+            dialect_hint = "MySQL SQL 查询。注意使用反引号标识符，LIMIT 分页。"
 
         # Fill template
         prompt = prompt_template.format(
@@ -208,12 +226,16 @@ class SQLGenerationNode:
             )
             logger.info("SQL generation retry #%d: %s", retry_count + 1, error_info)
 
-        # Build messages
+        # Build messages with dialect-aware system prompt
+        if not dialect_hint:
+            dialect_hint = "MySQL SQL 查询。注意使用反引号标识符，LIMIT 分页。"
+        system_content = (
+            f"你是一个专业的 SQL 查询助手，擅长将自然语言问题转换为准确、高效的 SQL 查询。\n\n"
+            f"当前数据库类型与语法规范：{dialect_hint}\n\n"
+            "请严格按照【分析】和【SQL】的格式输出。"
+        )
         messages = [
-            SystemMessage(content=(
-                "你是一个专业的 SQL 查询助手，擅长将自然语言问题转换为准确、高效的 MySQL SQL 查询。"
-                "请严格按照【分析】和【SQL】的格式输出。"
-            )),
+            SystemMessage(content=system_content),
             HumanMessage(content=prompt),
         ]
 
