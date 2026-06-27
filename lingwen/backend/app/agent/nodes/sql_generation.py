@@ -18,8 +18,12 @@ from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 
-# Regex to extract SQL from the 【SQL】 block
-_SQL_EXTRACT_RE = re.compile(r"【SQL】\s*(SELECT[\s\S]*?)$", re.IGNORECASE)
+# Regex to extract query from the 【SQL】 block — works for SQL (SELECT...),
+# ES|QL (FROM...), and other DSLs.  Strips optional markdown ```sql fences.
+_SQL_EXTRACT_RE = re.compile(
+    r"【SQL】\s*(?:```(?:sql|esql|text)?\s*)?([\s\S]*?)(?:```\s*)?$",
+    re.IGNORECASE,
+)
 
 # Default prompt when no skill template is configured
 _DEFAULT_PROMPT = (
@@ -111,30 +115,39 @@ def _format_history_context(history: list[dict]) -> str:
 
 
 def _extract_sql(text: str) -> str:
-    """Extract the SQL statement from the LLM response.
+    """Extract the query/SQL/ES|QL statement from the LLM response.
 
     Args:
         text: The raw LLM output containing 【分析】 and 【SQL】 blocks.
 
     Returns:
-        The extracted SQL, or the cleaned raw text if extraction fails.
+        The extracted query, or the cleaned raw text if extraction fails.
     """
     match = _SQL_EXTRACT_RE.search(text)
     if match:
-        sql = match.group(1).strip()
-        # Remove trailing 【 if any (from incomplete format)
-        sql = sql.rstrip("】").strip()
-        logger.debug("Extracted SQL: %s", sql[:200])
-        return sql
+        query = match.group(1).strip()
+        # Remove trailing 】 if any (from incomplete format)
+        query = query.rstrip("】").strip()
+    else:
+        # Fallback: try to find a SELECT statement (SQL) or FROM (ES|QL)
+        query = None
+        for pattern in [
+            r"(SELECT\s+[\s\S]*?)(?:;|\s*$)",
+            r"\b(FROM\s+\S+[\s\S]*?)(?:;|\s*$)",
+        ]:
+            m = re.search(pattern, text, re.IGNORECASE)
+            if m:
+                logger.warning("【SQL】 block not found, falling back to pattern extraction")
+                query = m.group(1).strip()
+                break
+        if query is None:
+            logger.error("No query could be extracted from LLM response")
+            return text.strip()
 
-    # Fallback: try to find any SELECT statement
-    select_match = re.search(r"(SELECT\s+[\s\S]*?)(?:;|\s*$)", text, re.IGNORECASE)
-    if select_match:
-        logger.warning("【SQL】 block not found, falling back to SELECT extraction")
-        return select_match.group(1).strip()
-
-    logger.error("No SQL could be extracted from LLM response")
-    return text.strip()
+    # Remove any remaining markdown code fences (trailing ```)
+    query = re.sub(r"```(?:\w+)?\s*$", "", query).strip()
+    logger.debug("Extracted query: %s", query[:200])
+    return query
 
 
 class SQLGenerationNode:

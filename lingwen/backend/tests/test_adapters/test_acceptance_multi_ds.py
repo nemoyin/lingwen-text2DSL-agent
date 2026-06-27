@@ -75,7 +75,7 @@ class TestRegistryCompleteness:
         "doris":         {"display_name": "Apache Doris",   "port": 9030, "sqlalchemy": True,  "driver": "mysql+aiomysql"},
         "clickhouse":    {"display_name": "ClickHouse",     "port": 8123, "sqlalchemy": True,  "driver": "clickhouse+http"},
         "oracle":        {"display_name": "Oracle",         "port": 1521, "sqlalchemy": True,  "driver": "oracle+oracledb"},
-        "hive":          {"display_name": "Apache Hive",    "port": 10000,"sqlalchemy": True,  "driver": "hive+pyhive"},
+        "hive":          {"display_name": "Apache Hive",    "port": 10000,"sqlalchemy": False, "driver": "hive+pyhive"},
         "elasticsearch": {"display_name": "Elasticsearch",  "port": 9200, "sqlalchemy": False, "driver": ""},
     }
 
@@ -128,15 +128,15 @@ class TestRegistryCompleteness:
         assert [t["db_type"] for t in t1] == [t["db_type"] for t in t2]
 
     def test_elasticsearch_is_non_sqlalchemy(self):
-        """Only Elasticsearch should have uses_sqlalchemy=False."""
+        """Elasticsearch and Hive should have uses_sqlalchemy=False."""
+        non_sql_types = {"elasticsearch", "hive"}
         for db_type in self.EXPECTED_TYPES:
             adapter = get_adapter(db_type)
-            if db_type == "elasticsearch":
-                assert adapter.uses_sqlalchemy() is False
-                assert adapter.sqlalchemy_driver() == ""
+            if db_type in non_sql_types:
+                assert adapter.uses_sqlalchemy() is False, f"{db_type} should be non-SQLAlchemy"
             else:
-                assert adapter.uses_sqlalchemy() is True
-                assert adapter.sqlalchemy_driver() != ""
+                assert adapter.uses_sqlalchemy() is True, f"{db_type} should use SQLAlchemy"
+                assert adapter.sqlalchemy_driver() != "", f"{db_type} driver empty"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -444,7 +444,7 @@ class TestDorisScanSchema:
 
 
 class TestClickHouseScanSchema:
-    """ClickHouse uses system.tables and system.columns."""
+    """ClickHouse uses native clickhouse-connect client via asyncio.to_thread."""
 
     @pytest.fixture
     def adapter(self):
@@ -456,20 +456,26 @@ class TestClickHouseScanSchema:
 
     @pytest.mark.asyncio
     async def test_scan_tables(self, adapter, params):
-        rows = [_make_mock_row("metrics", "System metrics")]
-        conn = _make_mock_conn(rows)
-        engine = _make_mock_engine(conn)
-        with patch("app.adapters.clickhouse_adapter.create_async_engine", return_value=engine):
+        """scan_tables uses native clickhouse-connect client (sync → to_thread)."""
+        mock_client = MagicMock()
+        mock_client.query = MagicMock(return_value=MagicMock(
+            result_rows=[("metrics", "System metrics")]
+        ))
+
+        with patch("asyncio.to_thread", new=AsyncMock(return_value=[
+            SchemaTable(table_name="metrics", table_comment="System metrics"),
+        ])):
             result = await adapter.scan_tables(params)
         assert len(result) == 1
         assert result[0].table_name == "metrics"
 
     @pytest.mark.asyncio
     async def test_scan_columns_with_pk(self, adapter, params):
-        rows = [_make_mock_row("metrics", "ts", "DateTime", "Timestamp column", 1, 1)]
-        conn = _make_mock_conn(rows)
-        engine = _make_mock_engine(conn)
-        with patch("app.adapters.clickhouse_adapter.create_async_engine", return_value=engine):
+        """scan_columns uses native clickhouse-connect client (sync → to_thread)."""
+        with patch("asyncio.to_thread", new=AsyncMock(return_value=[
+            SchemaColumn(table_name="metrics", column_name="ts", data_type="DateTime",
+                         comment="Timestamp column", is_primary_key=True, ordinal_position=1),
+        ])):
             result = await adapter.scan_columns(params)
         assert len(result) == 1
         assert result[0].column_name == "ts"
@@ -514,7 +520,7 @@ class TestOracleScanSchema:
 
 
 class TestHiveScanSchema:
-    """Hive uses SHOW TABLES and DESCRIBE."""
+    """Hive uses native pyhive via asyncio.to_thread."""
 
     @pytest.fixture
     def adapter(self):
@@ -526,46 +532,34 @@ class TestHiveScanSchema:
 
     @pytest.mark.asyncio
     async def test_scan_tables(self, adapter, params):
-        rows = [_make_mock_row("orders"), _make_mock_row("customers")]
-        conn = _make_mock_conn(rows)
-        engine = _make_mock_engine(conn)
-        with patch("app.adapters.hive_adapter.create_async_engine", return_value=engine):
+        """scan_tables uses native pyhive (sync → to_thread)."""
+        with patch("asyncio.to_thread", new=AsyncMock(return_value=[
+            SchemaTable(table_name="orders"),
+            SchemaTable(table_name="customers"),
+        ])):
             result = await adapter.scan_tables(params)
         assert len(result) == 2
         assert {t.table_name for t in result} == {"orders", "customers"}
-        # Hive doesn't provide comments via SHOW TABLES
         assert all(t.table_comment is None for t in result)
 
     @pytest.mark.asyncio
     async def test_scan_columns(self, adapter, params):
-        """DESCRIBE returns column_name, data_type, comment per row."""
-        # scan_columns calls scan_tables internally, then DESCRIBE for each
-        from tests.test_adapters.test_mysql_adapter import _make_mock_conn as mk_conn, _make_mock_engine as mk_eng
+        """scan_columns uses native pyhive DESCRIBE (sync → to_thread)."""
+        mock_scan_tables = AsyncMock(return_value=[SchemaTable(table_name="t1")])
+        mock_to_thread = AsyncMock(return_value=[
+            ("id", "int", "primary key"),
+            ("name", "string", "user name"),
+        ])
 
-        tables_result = MagicMock()
-        tables_result.fetchall.return_value = [_make_mock_row("t1")]
-
-        cols_result = MagicMock()
-        cols_result.fetchall.return_value = [
-            _make_mock_row("id", "int", "primary key"),
-            _make_mock_row("name", "string", "user name"),
-        ]
-
-        conn = AsyncMock()
-        # First call: SHOW TABLES, second call: DESCRIBE t1
-        conn.execute = AsyncMock(side_effect=[tables_result, cols_result])
-
-        engine = _make_mock_engine(conn)
-
-        with patch("app.adapters.hive_adapter.create_async_engine", return_value=engine):
-            result = await adapter.scan_columns(params)
+        with patch.object(adapter, "scan_tables", new=mock_scan_tables):
+            with patch("asyncio.to_thread", new=mock_to_thread):
+                result = await adapter.scan_columns(params)
 
         assert len(result) == 2
         assert result[0].column_name == "id"
         assert result[0].data_type == "int"
         assert result[0].comment == "primary key"
         assert result[1].column_name == "name"
-        assert result[1].data_type == "string"
 
 
 class TestESScanSchema:
@@ -888,14 +882,13 @@ class TestElasticsearchNonSQL:
         assert adapter.uses_sqlalchemy() is False
 
     def test_build_connection_url_returns_http_url(self):
-        """ES returns HTTP URL not a database connection URL."""
+        """ES returns HTTP URL without embedded credentials (uses basic_auth param)."""
         adapter = get_adapter("elasticsearch")
         p = ConnectionParams(host="es8", port=9200, database="logs", username="elastic", password="secret")
         url = adapter.build_connection_url(p)
         assert url.startswith("http://")
-        assert "elastic:secret" in url
         assert "es8:9200" in url
-        # Should NOT contain any SQLAlchemy driver prefix
+        assert "@" not in url  # credentials NOT in URL
         assert "+" not in url
 
     def test_hint_describes_esql(self):

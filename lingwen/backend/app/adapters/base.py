@@ -219,6 +219,29 @@ class BaseDataSourceAdapter(ABC):
             errors.append("用户名不能为空")
         return errors
 
+    # ── Query execution (non-SQL adapters) ──────────────────────────────
+
+    async def execute_query(
+        self, params: ConnectionParams, query: str
+    ) -> list[dict]:
+        """Execute a read-only query and return rows as dicts.
+
+        The default implementation raises ``NotImplementedError``.
+        Non-SQLAlchemy adapters (e.g. Elasticsearch) **must** override this
+        method.  SQLAlchemy-based adapters are handled by the service layer
+        and do not need to implement it.
+
+        Args:
+            params: Decrypted connection parameters.
+            query: The validated query string (SQL, ES|QL, etc.).
+
+        Returns:
+            A list of dicts, each representing one row.
+        """
+        raise NotImplementedError(
+            f"{self.db_type()} adapter does not implement execute_query()"
+        )
+
     # ── Lifecycle ────────────────────────────────────────────────────────
 
     async def dispose(self) -> None:

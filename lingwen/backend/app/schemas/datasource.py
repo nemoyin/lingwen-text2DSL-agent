@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 #: Supported database types (mirrors registered adapters).
 DBType = Literal[
     "mysql", "postgresql", "oracle", "doris",
-    "clickhouse", "hive", "elasticsearch", "csv_temp",
+    "clickhouse", "hive", "elasticsearch", "dm", "csv_temp",
 ]
 
 

@@ -40,12 +40,10 @@ class ElasticsearchAdapter(BaseDataSourceAdapter):
     def sqlalchemy_driver() -> str: return ""
 
     def _build_http_base(self, params: ConnectionParams) -> str:
-        """Build the HTTP base URL for ES REST API calls."""
+        """Build the HTTP base URL for ES REST API calls (no credentials — they are passed via basic_auth)."""
         secure = params.extra_params.get("secure", False)
         protocol = "https" if secure else "http"
-        user = quote_plus(params.username)
-        pw = quote_plus(params.password)
-        return f"{protocol}://{user}:{pw}@{params.host}:{params.port}"
+        return f"{protocol}://{params.host}:{params.port}"
 
     def build_connection_url(self, params: ConnectionParams) -> str:
         """Return a canonical URL string (used as engine cache key, not for SQLAlchemy)."""
@@ -55,7 +53,8 @@ class ElasticsearchAdapter(BaseDataSourceAdapter):
         try:
             from elasticsearch import AsyncElasticsearch
             es = AsyncElasticsearch(
-                [self._build_http_base(params)],
+                self._build_http_base(params),
+                basic_auth=(params.username, params.password),
                 verify_certs=params.extra_params.get("verify_certs", True),
                 request_timeout=5,
             )
@@ -73,7 +72,8 @@ class ElasticsearchAdapter(BaseDataSourceAdapter):
         """Return an authenticated AsyncElasticsearch client."""
         from elasticsearch import AsyncElasticsearch
         return AsyncElasticsearch(
-            [self._build_http_base(params)],
+            self._build_http_base(params),
+            basic_auth=(params.username, params.password),
             verify_certs=params.extra_params.get("verify_certs", True),
             request_timeout=10,
         )
@@ -124,6 +124,51 @@ class ElasticsearchAdapter(BaseDataSourceAdapter):
             await es.close()
 
         return columns
+
+    # ── Query execution (ES|QL via esql.query) ───────────────────────────
+
+    async def execute_query(
+        self, params: ConnectionParams, query: str
+    ) -> list[dict]:
+        """Execute an ES|QL query via the Elasticsearch ``esql.query`` API.
+
+        Args:
+            params: Decrypted connection parameters.
+            query: The validated ES|QL query string.
+
+        Returns:
+            A list of dicts, each representing one row.
+        """
+        from elasticsearch import AsyncElasticsearch
+
+        es = AsyncElasticsearch(
+            self._build_http_base(params),
+            basic_auth=(params.username, params.password),
+            verify_certs=params.extra_params.get("verify_certs", True),
+            request_timeout=30,
+        )
+        try:
+            # Strip markdown fences, 【分析】 prefix, and artifacts from LLM output
+            import re as _re
+            cleaned = query.strip()
+            # Remove 【分析】...【SQL】 prefix if present
+            cleaned = _re.sub(r"【分析】[\s\S]*?【SQL】", "", cleaned)
+            # Remove all markdown code fences
+            cleaned = _re.sub(r"```(?:\w+)?\s*", "", cleaned)
+            # Remove leading/trailing whitespace and semicolons
+            cleaned = cleaned.strip().rstrip(";").strip()
+
+            logger.info("ES|QL query: %s", cleaned[:200])
+
+            resp = await es.esql.query(query=cleaned)
+            columns = [c["name"] for c in (resp.get("columns") or [])]
+            rows = []
+            for val_row in resp.get("values") or []:
+                rows.append(dict(zip(columns, val_row)))
+            logger.info("ES|QL returned %d rows", len(rows))
+            return rows
+        finally:
+            await es.close()
 
     def get_dialect_hint(self) -> str:
         return (

@@ -60,6 +60,7 @@ async def create(db: AsyncSession, data: DataSourceCreate) -> DataSource:
         database=data.database,
         username=data.username,
         password_encrypted=encrypt_password(data.password),
+        extra_params=data.extra_params if data.extra_params else None,
     )
     db.add(ds)
     await db.commit()
@@ -229,22 +230,67 @@ async def get_connection(db: AsyncSession, ds_id: int) -> AsyncEngine:
 async def execute_query(
     db: AsyncSession, ds_id: int, sql: str
 ) -> list[dict]:
-    """Execute a read-only SQL statement against a user data source.
+    """Execute a read-only statement against a user data source.
+
+    For SQLAlchemy-based adapters the statement is executed via a dynamic
+    engine.  For non-SQL adapters (Elasticsearch) the adapter's own
+    ``execute_query`` method is called with the decrypted connection params.
 
     Args:
         db: The database session.
         ds_id: The primary key of the data source.
-        sql: A validated, read-only SQL SELECT statement.
+        sql: A validated, read-only query (SQL or ES|QL).
 
     Returns:
         A list of dicts, each representing one row.
     """
-    engine = await get_connection(db, ds_id)
-    async with engine.connect() as conn:
-        result = await conn.execute(text(sql))
-        rows = result.fetchall()
-        columns = list(result.keys())
-        return [dict(zip(columns, row)) for row in rows]
+    ds = await get(db, ds_id)
+    password = decrypt_password(ds.password_encrypted)
+    adapter = get_adapter(ds.db_type)
+
+    params = _build_connection_params(ds, password)
+
+    if not adapter.uses_sqlalchemy():
+        # Non-SQL adapter path — delegate to adapter's native execution
+        return await adapter.execute_query(params, sql)
+
+    # SQLAlchemy path — try async engine; fall back to sync + to_thread
+    # for dialects without async support (e.g. clickhouse+http)
+
+    # Strip residual markdown fences / semicolons from LLM output
+    sql = sql.strip().rstrip(";").strip()
+    sql = __import__("re").sub(r"```(?:\w+)?\s*$", "", sql).strip()
+
+    try:
+        engine = await get_connection(db, ds_id)
+        async with engine.connect() as conn:
+            result = await conn.execute(text(sql))
+            rows = result.fetchall()
+            columns = list(result.keys())
+            return [dict(zip(columns, row)) for row in rows]
+    except Exception as async_err:
+        err_msg = str(async_err).lower()
+        if "asyncio" in err_msg or "async" in err_msg:
+            logger.info(
+                "Async engine not available for ds_id=%d, falling back to sync + to_thread",
+                ds_id,
+            )
+            import asyncio as _asyncio
+            from sqlalchemy import create_engine as _sync_create_engine
+
+            url = adapter.build_connection_url(params)
+            sync_engine = _sync_create_engine(url, echo=False)
+            try:
+                def _sync_execute():
+                    with sync_engine.connect() as conn:
+                        result = conn.execute(text(sql))
+                        rows = result.fetchall()
+                        columns = list(result.keys())
+                        return [dict(zip(columns, row)) for row in rows]
+                return await _asyncio.to_thread(_sync_execute)
+            finally:
+                sync_engine.dispose()
+        raise
 
 
 async def _dispose_engine(ds_id: int) -> None:

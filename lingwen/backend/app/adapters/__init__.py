@@ -93,3 +93,4 @@ from app.adapters.clickhouse_adapter import ClickHouseAdapter  # noqa: E402, F40
 from app.adapters.oracle_adapter import OracleAdapter  # noqa: E402, F401
 from app.adapters.hive_adapter import HiveAdapter  # noqa: E402, F401
 from app.adapters.elasticsearch_adapter import ElasticsearchAdapter  # noqa: E402, F401
+from app.adapters.dm_adapter import DMAdapter  # noqa: E402, F401

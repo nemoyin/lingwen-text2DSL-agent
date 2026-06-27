@@ -20,7 +20,7 @@ class TestHiveIdentity:
     def test_display_name(self, adapter): assert adapter.display_name() == "Apache Hive"
     def test_default_port(self, adapter): assert adapter.default_port() == 10000
     def test_sqlalchemy_driver(self, adapter): assert "hive" in adapter.sqlalchemy_driver()
-    def test_uses_sqlalchemy(self, adapter): assert adapter.uses_sqlalchemy() is True
+    def test_uses_sqlalchemy(self, adapter): assert adapter.uses_sqlalchemy() is False
 
 
 class TestHiveURL:
