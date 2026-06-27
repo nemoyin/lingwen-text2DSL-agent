@@ -82,7 +82,12 @@ class DorisAdapter(BaseDataSourceAdapter):
         return [SchemaColumn(table_name=r[0], column_name=r[1], data_type=r[2], nullable=r[3]=="YES", default_value=str(r[4]) if r[4] is not None else None, comment=r[5] if r[5] else None, is_primary_key=r[6]=="PRI", ordinal_position=int(r[7]) if r[7] else 0) for r in rows]
 
     def get_dialect_hint(self) -> str:
-        return "Apache Doris SQL 查询（兼容 MySQL 协议）。注意聚合模型表不可直接 DELETE/UPDATE，使用 BITMAP/HLL 近似去重，支持特有的聚合函数。"
+        return (
+            "Apache Doris SQL 查询（兼容 MySQL 协议）。"
+            "注意：标识符不要使用反引号(`)，使用双引号或直接引用。"
+            "聚合模型表不可直接 DELETE/UPDATE，"
+            "使用 BITMAP/HLL 近似去重，支持特有的聚合函数。"
+        )
 
     def get_extra_fields_schema(self) -> dict: return {}
 

@@ -22,7 +22,7 @@ class DataSourceCreate(BaseModel):
     port: int = Field(default=3306, ge=1, le=65535, description="端口号")
     database: str = Field(..., min_length=1, max_length=200, description="数据库名")
     username: str = Field(..., min_length=1, max_length=200, description="数据库用户名")
-    password: str = Field(..., min_length=1, description="数据库密码（明文，存储时加密）")
+    password: str = Field(default="", description="数据库密码（明文，存储时加密，无密码时传空字符串）")
     extra_params: Optional[Dict[str, Any]] = Field(
         default=None, description="类型特定的连接参数（schema, service_name, auth_type 等）"
     )
@@ -37,7 +37,7 @@ class DataSourceUpdate(BaseModel):
     port: Optional[int] = Field(default=None, ge=1, le=65535, description="端口号")
     database: Optional[str] = Field(default=None, min_length=1, max_length=200, description="数据库名")
     username: Optional[str] = Field(default=None, min_length=1, max_length=200, description="数据库用户名")
-    password: Optional[str] = Field(default=None, min_length=1, description="数据库密码（明文，存储时加密）")
+    password: Optional[str] = Field(default=None, description="数据库密码（明文，存储时加密，无密码时传空字符串）")
     extra_params: Optional[Dict[str, Any]] = Field(
         default=None, description="类型特定的连接参数"
     )
