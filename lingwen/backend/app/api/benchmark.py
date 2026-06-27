@@ -139,6 +139,9 @@ async def execute_run(
 
 
 def _keyword_score(expected: str, actual: str) -> float:
+    # Error answers should never pass
+    if actual.startswith("ERROR:") or "查询失败" in actual:
+        return 0.0
     if not expected:
         return 0.5
     if expected.lower().strip() == actual.lower().strip():

@@ -69,8 +69,8 @@ export default function BenchmarkPage() {
           {runs.map(r => (
             <TableRow key={r.id}>
               <TableCell>{r.set_name}</TableCell>
-              <TableCell>ID:{r.datasource_id}</TableCell>
-              <TableCell><Chip size="small" label={`${r.score}%`} color={r.score > 60 ? 'success' : 'warning'} /></TableCell>
+              <TableCell>{datasources.find((d: any) => d.id === r.datasource_id)?.name || `ID:${r.datasource_id}`}</TableCell>
+              <TableCell><Chip size="small" label={`${r.score}%`} color={(r.score ?? 0) > 60 ? 'success' : 'warning'} /></TableCell>
               <TableCell>{r.passed_count}/{r.total_count}</TableCell>
               <TableCell><Chip size="small" label={r.status} color={r.status === 'done' ? 'success' : r.status === 'running' ? 'info' : 'default'} variant="outlined" /></TableCell>
               <TableCell>
@@ -127,6 +127,19 @@ export default function BenchmarkPage() {
                 <Chip size="small" label={`${r.latency_ms}ms`} />
                 <Chip size="small" label={r.passed ? '通过' : '未通过'} color={r.passed ? 'success' : 'error'} variant="outlined" />
               </Box>
+              {r.actual_sql && (
+                <Box mt={0.5}>
+                  <Typography variant="caption" color="text.secondary">生成 SQL</Typography>
+                  <Typography variant="body2" fontSize={11} fontFamily="monospace" sx={{ whiteSpace: 'pre-wrap', bgcolor: '#fafafa', p: 0.5, borderRadius: 0.5, maxHeight: 80, overflow: 'auto' }}>
+                    {r.actual_sql?.slice(0, 300)}
+                  </Typography>
+                </Box>
+              )}
+              {r.pipeline_json && (
+                <Box mt={0.5}>
+                  <Typography variant="caption" color="text.secondary">管线步骤 ({(() => { try { return JSON.parse(r.pipeline_json || '[]').length } catch { return 0 } })()}步)</Typography>
+                </Box>
+              )}
             </Box>
           ))}
         </DialogContent>
