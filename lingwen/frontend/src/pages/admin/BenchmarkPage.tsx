@@ -149,6 +149,17 @@ export default function BenchmarkPage() {
                   <TableCell>
                     <Chip
                       size="small"
+                      icon={exec ? (
+                        <Box sx={{
+                          width: 8, height: 8, borderRadius: '50%',
+                          bgcolor: 'info.main',
+                          animation: 'pulse 1.2s ease-in-out infinite',
+                          '@keyframes pulse': {
+                            '0%, 100%': { opacity: 1, transform: 'scale(1)' },
+                            '50%': { opacity: 0.3, transform: 'scale(0.7)' },
+                          },
+                        }} />
+                      ) : undefined}
                       label={exec ? `执行中 ${passed}/${total}` : r.status === 'done' ? '已完成' : r.status}
                       color={done ? 'success' : exec ? 'info' : 'default'}
                       variant={exec ? 'filled' : 'outlined'}
