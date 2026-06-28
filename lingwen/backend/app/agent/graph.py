@@ -104,10 +104,13 @@ def _build_step_reasoning(node_name: str, node_output: dict) -> str:
         return _format_rag_detail(schemas, examples)
 
     if node_name == "sql_validate":
-        sql = str(node_output.get("generated_sql", "") or "")
-        if sql:
-            return f"SQL 安全审计通过（已注入 LIMIT 100 限制，{len(sql)} 字符）"
-        return "SQL 为空，跳过校验"
+        err = node_output.get("error_info", "")
+        if err:
+            return f"SQL 安全审计拦截: {str(err)[:200]}"
+        executed_sql = str(node_output.get("executed_sql", "") or "")
+        if executed_sql:
+            return f"SQL 安全审计通过（已注入 LIMIT 1000，{len(executed_sql)} 字符）"
+        return "SQL 安全审计完成"
 
     if node_name == "sql_exec":
         rows = node_output.get("execution_result", [])
@@ -227,7 +230,7 @@ class QueryAgent:
         # Serial edges
         builder.add_edge("intent_rec", "perm_check")
         builder.add_edge("rag_retrieve", "sql_gen")
-        builder.add_edge("sql_gen", "sql_exec")  # 演示模式：跳过安全审计节点
+        builder.add_edge("sql_gen", "sql_validate")
         builder.add_edge("result_wrap", "final")
         builder.add_edge("final", END)
 
@@ -237,6 +240,16 @@ class QueryAgent:
             self._route_after_perm_check,
             {
                 "rag_retrieve": "rag_retrieve",
+                "result_wrap": "result_wrap",
+            },
+        )
+
+        # Conditional: sql_validate → sql_exec or result_wrap (skip retry for dangerous SQL)
+        builder.add_conditional_edges(
+            "sql_validate",
+            self._route_after_sql_validate,
+            {
+                "sql_exec": "sql_exec",
                 "result_wrap": "result_wrap",
             },
         )
@@ -251,7 +264,6 @@ class QueryAgent:
             },
         )
 
-        # NOTE: sql_gen → sql_validate → sql_exec normally, but demo mode skips validation
         compiled = builder.compile()
         logger.info("QueryAgent StateGraph compiled successfully")
         return compiled
@@ -273,6 +285,20 @@ class QueryAgent:
             logger.warning("Permission check failed — routing to result_wrap")
             return "result_wrap"
         return "rag_retrieve"
+
+    @staticmethod
+    def _route_after_sql_validate(state: AgentState) -> Literal["sql_exec", "result_wrap"]:
+        """Route after SQL validation.
+
+        Dangerous operations (DROP, DELETE, etc.) skip retry and go
+        straight to result_wrap.  Recoverable errors proceed to execution
+        where the existing retry logic handles them.
+        """
+        error: str | None = state.get("error_info")
+        if error and ("禁止" in error or "注入" in error):
+            logger.warning("SQL validation blocked dangerous operation — routing to result_wrap")
+            return "result_wrap"
+        return "sql_exec"
 
     @staticmethod
     def _route_after_sql_exec(state: AgentState) -> Literal["sql_gen", "result_wrap"]:
@@ -384,7 +410,11 @@ class QueryAgent:
         retry = fs.get("retry_count", 0)
         add_step("sql_gen", "SQL生成", f"{'CoT推理完成' if cot else '生成SQL'}\n{sql[:200]}" + (f"\n(重试{retry}次)" if retry else ""))
 
-        add_step("sql_validate", "安全审计", "已跳过(演示模式)", "ok")
+        val_err = fs.get("error_info", "")
+        val_ok = not val_err or ("禁止" not in val_err and "注入" not in val_err)
+        add_step("sql_validate", "安全审计",
+            "SQL 安全校验通过" if val_ok else val_err[:100],
+            "ok" if val_ok else "error")
 
         rows = fs.get("execution_result", [])
         err = fs.get("error_info", "")
@@ -518,7 +548,8 @@ class QueryAgent:
                     + f"\n推理: {str(fs.get('native_reasoning', '') or fs.get('cot_reasoning', ''))[:300]}",
             },
             "安全审计": {
-                "detail": "已跳过(演示模式)",
+                "detail": "SQL 安全校验通过" if not fs.get("error_info") or ("禁止" not in str(fs.get("error_info","")) and "注入" not in str(fs.get("error_info",""))) else str(fs.get("error_info", ""))[:100],
+                "status": "ok" if not fs.get("error_info") or ("禁止" not in str(fs.get("error_info","")) and "注入" not in str(fs.get("error_info",""))) else "error",
             },
             "SQL执行": {
                 "detail": f"返回 {len(fs.get('execution_result', []))} 行" if not fs.get("error_info")

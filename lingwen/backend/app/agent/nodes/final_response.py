@@ -61,7 +61,7 @@ class FinalResponseNode:
             "data": execution_result,
             "columns": columns,
             "analysis": state.get("ai_analysis", ""),
-            "sql": state.get("generated_sql", ""),
+            "sql": state.get("executed_sql") or state.get("generated_sql", ""),
             "chart_suggestion": state.get("chart_suggestion"),
             "row_count": row_count,
             "is_truncated": is_truncated,
