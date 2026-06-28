@@ -127,6 +127,10 @@ async def execute_run(
         await db.execute(text(
             "INSERT INTO benchmark_results (run_id, question, expected_answer, actual_answer, actual_sql, pipeline_json, latency_ms, similarity_score, passed) VALUES (:r,:q,:e,:a,:s,:p,:l,:sc,:pa)"
         ), {"r": run_id, "q": q["question"], "e": expected, "a": actual[:2000], "s": actual_sql[:2000], "p": pipeline, "l": latency, "sc": round(score, 2), "pa": is_pass})
+        # Update real-time progress so frontend polling shows accurate counts
+        await db.execute(text(
+            "UPDATE benchmark_runs SET passed_count=:p, total_count=:t WHERE id=:id"
+        ), {"p": passed, "t": total, "id": run_id})
         await db.commit()
 
     overall = round(passed / total * 100, 2) if total > 0 else 0
