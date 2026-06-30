@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api import auth, query, datasources, schema, metadata, few_shot, skills, history, stats, csv_upload, history_ext, alerts, settings, rbac, benchmark, models, logs, rag
+from app.api import auth, query, datasources, schema, metadata, few_shot, skills, history, stats, csv_upload, history_ext, alerts, settings, rbac, benchmark, models, logs, rag, mcp
 
 api_router = APIRouter()
 
@@ -59,3 +59,6 @@ api_router.include_router(logs.router, prefix="/api", tags=["日志查看"])
 
 # RAG management
 api_router.include_router(rag.router, prefix="/api/rag", tags=["RAG管理"])
+
+# MCP Server (SSE transport)
+api_router.include_router(mcp.router, prefix="/api/mcp", tags=["MCP"])

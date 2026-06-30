@@ -23,10 +23,21 @@ ALEMBIC_URL="mysql+aiomysql://${DB_USER}:${DB_PASS}@${DB_HOST}:${DB_PORT}/${DB_N
 # 运行时替换 alembic.ini 中的数据库连接 URL
 sed -i "s|^sqlalchemy.url = .*|sqlalchemy.url = ${ALEMBIC_URL}|" /app/alembic.ini
 
-# 运行数据库迁移
+# 运行数据库迁移（若 init.sql 已建表则自动跳过）
 echo "[1/2] 运行 Alembic 数据库迁移... (${DB_HOST}:${DB_PORT}/${DB_NAME})"
-alembic upgrade head
-echo "  ✓ 数据库迁移完成"
+if alembic upgrade head 2>/tmp/alembic_err.log; then
+    echo "  ✓ 数据库迁移完成"
+else
+    if grep -qi "already exists" /tmp/alembic_err.log; then
+        echo "  ⚠ 表已存在（init.sql 已初始化），标记迁移版本..."
+        alembic stamp head
+        echo "  ✓ 迁移版本已标记"
+    else
+        echo "  ✗ 数据库迁移失败:"
+        cat /tmp/alembic_err.log
+        exit 1
+    fi
+fi
 
 # 启动 Uvicorn
 echo "[2/2] 启动 Uvicorn 服务..."

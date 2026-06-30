@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 _WHITELIST_PATHS: List[str] = [
     "/api/auth/login",
     "/api/health",
+    "/api/mcp",  # MCP Server — handles its own auth
     "/docs",
     "/openapi.json",
     "/redoc",

@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir \
     sqlalchemy pymysql aiomysql alembic \
     python-jose[cryptography] passlib[bcrypt] python-multipart \
     langchain langchain-deepseek langgraph langchain-community chromadb \
-    httpx python-dotenv csvkit \
+    httpx python-dotenv csvkit mcp \
     && rm -rf /root/.cache/pip
 
 # Copy application source code

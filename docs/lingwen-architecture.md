@@ -1,6 +1,6 @@
 # 灵问（lingwen）智能问数引擎 — 系统架构设计文档
 
-> **版本**: v1.1 | **日期**: 2026-06-28 | **作者**: Bob（架构师）
+> **版本**: v1.2 | **日期**: 2026-06-29 | **作者**: Bob（架构师）
 >
 > **基于 PRD**: lingwen-prd.md v1.0
 
@@ -274,4 +274,23 @@ RAG 无结果时自动触发元数据回退：直接从 MySQL 查询 `tables_met
 
 ---
 
-> **文档结束** — v1.1 更新于 2026-06-28，补充多数据源适配器、Agent 测评、流式推送、多模型管理等内容。
+## 10. MCP Server（计划中）
+
+Lingwen 计划通过 [MCP (Model Context Protocol)](https://spec.modelcontextprotocol.io/) 将自然语言查数能力暴露给外部 AI 平台。详细设计见：
+
+→ [灵问 MCP Server 需求与设计方案](./lingwen-mcp-server-design.md)
+
+**核心 Tools**：
+| Tool | 功能 |
+|------|------|
+| `lingwen_query` | 自然语言查数 |
+| `lingwen_list_datasources` | 列出可用数据源 |
+| `lingwen_get_schema` | 获取数据源 Schema |
+
+**传输模式**：stdio（本地 IDE）+ SSE（远程平台）
+
+**设计原则**：MCP Server 为薄封装层，完全复用现有 Service 层、Agent 管线、SqlGuard 和 RBAC，零侵入现有代码。
+
+---
+
+> **文档结束** — v1.2 更新于 2026-06-29，新增 MCP Server 设计章节。
