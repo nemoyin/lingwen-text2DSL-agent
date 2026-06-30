@@ -54,6 +54,52 @@ Unlike naive Text2SQL approaches, Lingwen uses an **Agent + RAG (Retrieval-Augme
 - 🔒 **Row-level Security** — Auto-inject data scope filters per user identity
 - 🗄️ **Multi-Datasource** — PostgreSQL, ClickHouse, and more
 
+### 🆕 MCP Server (v0.3)
+
+- 🔌 **MCP Protocol Support** — Expose NL2SQL as MCP tools for any AI platform
+- 🛠️ **Two Tools** — `lingwen_query` (natural language → data) + `lingwen_list_datasources` (discovery)
+- 📡 **Dual Transport** — stdio for local IDEs (Claude Desktop/Code, Cursor) + SSE for remote platforms (Dify, n8n)
+- 🔐 **JWT Auth** — Reuses existing authentication, zero additional setup
+- 🪶 **Zero-Invasion** — Thin wrapper over existing service layer, ~500 lines of code
+
+---
+
+## 🔌 MCP Server
+
+Lingwen exposes its NL2SQL capabilities as [MCP (Model Context Protocol)](https://spec.modelcontextprotocol.io/) tools, enabling any MCP-compatible AI platform to query your databases in natural language.
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `lingwen_query` | Natural language → data table + AI analysis + SQL |
+| `lingwen_list_datasources` | List all available data sources |
+
+### Quick Config
+
+**Claude Desktop / Claude Code / WorkBuddy:**
+
+```json
+{
+  "mcpServers": {
+    "lingwen": {
+      "command": "docker",
+      "args": ["exec", "-i", "-e", "LINGWEN_JWT_TOKEN=<your-token>", "tianfu-backend", "python", "mcp_entrypoint.py"]
+    }
+  }
+}
+```
+
+**Dify / n8n (SSE):**
+
+```yaml
+url: http://your-server:8001/api/mcp/sse
+headers:
+  Authorization: Bearer <your-token>
+```
+
+> 📖 Full MCP setup guide: [lingwen-mcp-server-design.md](docs/lingwen-mcp-server-design.md)
+
 ---
 
 ## 🏗️ Architecture
@@ -117,7 +163,8 @@ lingwen/
 ├── backend/                    # Python FastAPI backend
 │   ├── app/
 │   │   ├── agent/              # LangGraph nodes (8-step pipeline)
-│   │   ├── api/                # REST API routes
+│   │   ├── api/                # REST API routes + MCP SSE endpoint
+│   │   ├── mcp_server/          # MCP Server (tools, auth)
 │   │   ├── models/             # SQLAlchemy ORM models
 │   │   ├── schemas/            # Pydantic v2 request/response types
 │   │   ├── services/           # Business logic layer
@@ -127,6 +174,7 @@ lingwen/
 │   │   └── utils/              # CSV export, response helpers
 │   ├── alembic/                # Database migrations
 │   ├── tests/                  # pytest test suite
+│   ├── mcp_entrypoint.py        # MCP stdio entry point
 │   └── pyproject.toml          # Poetry dependencies
 ├── frontend/                   # React + Vite frontend
 │   ├── src/
@@ -222,6 +270,7 @@ npm run dev
 | `/api/few-shot/{id}`         | GET/PUT/DELETE | Single example CRUD                                  |
 | `/api/skills`                | GET/POST       | Skill templates                                      |
 | `/api/skills/{id}`           | GET/PUT/DELETE | Single skill CRUD                                    |
+| `/api/mcp/sse`              | GET            | MCP SSE endpoint (AI platform integration)           |
 
 Full interactive API docs available at `http://localhost:8000/docs` (Swagger) and `http://localhost:8000/redoc` (ReDoc).
 
@@ -243,7 +292,9 @@ Full interactive API docs available at `http://localhost:8000/docs` (Swagger) an
 | ------------------------------------------------------- | ---------------------------------------------------------------- |
 | [PRD (Product Requirements)](docs/lingwen-prd.md)          | Full product definition, user stories, requirements              |
 | [Architecture Design](docs/lingwen-architecture.md)        | System design, class diagrams, sequence diagrams, task breakdown |
+| [MCP Server Design](docs/lingwen-mcp-server-design.md)      | MCP tools, transports, auth, integration guide                    |
 | [Deployment Guide](lingwen/deploy-guide.md)                | Docker deployment, configuration, troubleshooting                |
+| [Competitive Analysis](docs/lingwen-vs-sqlbot-vs-dbgpt.md) | Lingwen vs SQLBot vs DB-GPT comparison                           |
 | [System Design (Charts &amp; Export)](UI/system_design.md) | Chart visualization & data export design                         |
 
 ---
@@ -252,7 +303,7 @@ Full interactive API docs available at `http://localhost:8000/docs` (Swagger) an
 
 - [X] **v0.1** — MVP: 8-step agent pipeline, MySQL datasource, chat UI, admin console
 - [X] **v0.2** — Charts (Chart.js), CSV/Excel export, Few-shot management, Skill templates
-- [ ] **v0.3** — Redis caching, query history, audit logs
+- [x] **v0.3** — MCP Server, Redis caching, query history, audit logs
 - [ ] **v1.0** — RBAC, row-level security, multi-datasource (PostgreSQL, ClickHouse)
 - [ ] **v1.1** — Multi-turn conversation, semantic caching, SSO integration
 

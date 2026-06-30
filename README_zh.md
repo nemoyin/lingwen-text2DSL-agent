@@ -51,6 +51,52 @@
 - 🔒 **行级权限注入** — 根据用户身份自动注入数据范围过滤条件
 - 🗄️ **多数据源支持** — PostgreSQL、ClickHouse 等
 
+### 🆕 MCP Server（v0.3）
+
+- 🔌 **MCP 协议支持** — 将 NL2SQL 能力暴露为 MCP Tools，任何 AI 平台均可调用
+- 🛠️ **两个工具** — `lingwen_query`（自然语言查数）+ `lingwen_list_datasources`（数据源发现）
+- 📡 **双传输模式** — stdio 用于本地 IDE（Claude Desktop/Code、Cursor）+ SSE 用于远程平台（Dify、n8n）
+- 🔐 **JWT 认证** — 复用现有认证体系，零额外配置
+- 🪶 **零侵入** — 现有 Service 层之上的薄封装，约 500 行代码
+
+---
+
+## 🔌 MCP Server
+
+灵问通过 [MCP（模型上下文协议）](https://spec.modelcontextprotocol.io/) 将自然语言查数能力暴露给外部 AI 平台，任何支持 MCP 的工具都能直接调用灵问查询数据库。
+
+### 可用工具
+
+| 工具 | 说明 |
+|------|------|
+| `lingwen_query` | 自然语言 → 数据表格 + AI 分析 + SQL |
+| `lingwen_list_datasources` | 列出所有可用数据源 |
+
+### 快速配置
+
+**Claude Desktop / Claude Code / WorkBuddy：**
+
+```json
+{
+  "mcpServers": {
+    "lingwen": {
+      "command": "docker",
+      "args": ["exec", "-i", "-e", "LINGWEN_JWT_TOKEN=<your-token>", "tianfu-backend", "python", "mcp_entrypoint.py"]
+    }
+  }
+}
+```
+
+**Dify / n8n（SSE 模式）：**
+
+```yaml
+url: http://your-server:8001/api/mcp/sse
+headers:
+  Authorization: Bearer <your-token>
+```
+
+> 📖 完整 MCP 接入指南：[lingwen-mcp-server-design.md](docs/lingwen-mcp-server-design.md)
+
 ---
 
 ## 🏗️ 系统架构
@@ -161,7 +207,8 @@ lingwen/
 │   │   │                       #   rag_retrieval, sql_generation,
 │   │   │                       #   sql_validation, sql_execution,
 │   │   │                       #   result_wrapping, final_response
-│   │   ├── api/                # REST API 路由层
+│   │   ├── api/                # REST API 路由层 + MCP SSE 端点
+│   │   ├── mcp_server/          # MCP Server（tools、auth）
 │   │   ├── models/             # SQLAlchemy ORM 模型（7 个实体）
 │   │   ├── schemas/            # Pydantic v2 请求/响应 Schema
 │   │   ├── services/           # 业务逻辑层（8 个服务）
@@ -171,6 +218,7 @@ lingwen/
 │   │   └── utils/              # CSV 导出、统一响应格式
 │   ├── alembic/                # 数据库迁移脚本
 │   ├── tests/                  # pytest 测试套件
+│   ├── mcp_entrypoint.py        # MCP stdio 入口
 │   └── pyproject.toml          # Poetry 依赖声明
 ├── frontend/                   # React + Vite 前端（约 58 个文件）
 │   ├── src/
@@ -276,6 +324,7 @@ npm run dev
 | `/api/few-shot/{id}` | GET/PUT/DELETE | 单个示例 CRUD |
 | `/api/skills` | GET/POST | Skill 模板列表/创建 |
 | `/api/skills/{id}` | GET/PUT/DELETE | 单个 Skill CRUD |
+| `/api/mcp/sse` | GET | MCP SSE 端点（AI 平台集成） |
 
 完整交互式 API 文档：`http://localhost:8000/docs`（Swagger）、`http://localhost:8000/redoc`（ReDoc）。
 
@@ -320,8 +369,10 @@ npm run dev
 |------|------|
 | [产品 PRD](docs/lingwen-prd.md) | 完整产品需求文档：用户故事、功能需求池、UI 设计、API 设计 |
 | [架构设计](docs/lingwen-architecture.md) | 系统架构设计：类图、时序图、任务分解、共享知识规范 |
+| [MCP Server 设计](docs/lingwen-mcp-server-design.md) | MCP Tools、传输模式、认证方案、接入指南 |
 | [部署指南](lingwen/deploy-guide.md) | Docker 部署、配置说明、常见问题排查 |
 | [图表与导出设计](UI/system_design.md) | Chart.js 图表可视化 & CSV/Excel 导出详细设计 |
+| [竞品对比](docs/lingwen-vs-sqlbot-vs-dbgpt.md) | Lingwen vs SQLBot vs DB-GPT 差异分析与差异化定位 |
 | [Mermaid 图表](docs/) | 类图、时序图、任务依赖图（.mermaid 文件） |
 
 ---
@@ -330,7 +381,7 @@ npm run dev
 
 - [x] **v0.1** — MVP：8 步 Agent 链路、MySQL 数据源、对话界面、管理后台、JWT 认证
 - [x] **v0.2** — 图表可视化（Chart.js）、CSV/Excel 导出、Few-shot 管理、Skill 模板
-- [ ] **v0.3** — Redis 缓存、查询历史、审计日志
+- [x] **v0.3** — MCP Server、Redis 缓存、查询历史、审计日志
 - [ ] **v1.0** — RBAC 权限、行级权限注入、多数据源（PostgreSQL、ClickHouse）
 - [ ] **v1.1** — 多轮对话、语义缓存、SSO 单点登录集成
 
